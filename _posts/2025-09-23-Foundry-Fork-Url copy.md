@@ -1,8 +1,8 @@
 ---
-title: Starting A Blog Hosted On Github Pages
-date: 2025-09-14 21:34 +0700
-categories: [Blogging, Tutorial]
-tags: [github-pages, blog, personal blog, jekyll]
+title: Solidity Slots Storage (coming soon)
+date: 2025-09-23 23:12 +0700
+categories: [Solidity]
+tags: [solidity, definition, blockchain]
 author: tremo
 ---
 

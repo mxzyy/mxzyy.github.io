@@ -48,7 +48,7 @@ jobs:
       - name: Test site
         run: |
           bundle exec htmlproofer ./_site \
-            --check-html \
+            --checks "Links,Images,Scripts" \
             --allow-hash-href \
             --no-enforce-https \
             --ignore-status-codes "0,403,404" \

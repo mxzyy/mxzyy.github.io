@@ -39,7 +39,7 @@ Scratch space is the first 64 bytes used for temporary operations. Commonly used
 - Inline assembly operations
 - Temporary storage for intermediate operations
 
-```solidity
+```
 // Example of scratch space usage in assembly
 assembly {
     mstore(0x00, value1)  // Store in scratch space
@@ -56,7 +56,7 @@ assembly {
 - Initial value: `0x80` (128 in decimal)
 - Solidity automatically updates FMP every time memory is allocated
 
-```solidity
+```
 // Reading Free Memory Pointer
 assembly {
     let fmp := mload(0x40)  // Read FMP value
@@ -78,7 +78,7 @@ Initial: FMP = 0x80
    - FMP updated to 0xe0 (0xa0 + 0x40)
 ```
 
-```solidity
+```
 // Example of manual memory allocation
 assembly {
     // Read current FMP
@@ -139,7 +139,7 @@ Memory is a volatile area more flexible than stack.
 | Gas cost | Cheap for small sizes, expensive for large |
 | Lifetime | During transaction execution |
 
-```solidity
+```
 // Memory operations in Solidity
 function memoryExample() public pure returns (bytes32) {
     bytes32 data;

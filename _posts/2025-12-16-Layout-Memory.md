@@ -180,7 +180,7 @@ Storage is persistent storage saved on the blockchain.
 | Gas cost | Very expensive |
 | Lifetime | Permanent (until modified) |
 
-```solidity
+```
 contract StorageExample {
     // Slot 0
     uint256 public value1;
@@ -222,7 +222,7 @@ contract StorageExample {
 
 ## Comprehensive Example
 
-```solidity
+```
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 

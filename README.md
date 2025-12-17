@@ -1,43 +1,37 @@
-# Chirpy Starter
+# mxzyy note's
 
-[![Gem Version](https://img.shields.io/gem/v/jekyll-theme-chirpy)][gem]&nbsp;
-[![GitHub license](https://img.shields.io/github/license/cotes2020/chirpy-starter.svg?color=blue)][mit]
+A personal blog built with [Jekyll](https://jekyllrb.com/), a static site generator that transforms plain text into beautiful websites. This blog uses the [Chirpy](https://github.com/cotes2020/jekyll-theme-chirpy/) theme, which provides a clean and feature-rich experience for writing and sharing notes, tutorials, and thoughts.
 
-When installing the [**Chirpy**][chirpy] theme through [RubyGems.org][gem], Jekyll can only read files in the folders
-`_data`, `_layouts`, `_includes`, `_sass` and `assets`, as well as a small part of options of the `_config.yml` file
-from the theme's gem. If you have ever installed this theme gem, you can use the command
-`bundle info --path jekyll-theme-chirpy` to locate these files.
+## Getting Started
 
-The Jekyll team claims that this is to leave the ball in the user’s court, but this also results in users not being
-able to enjoy the out-of-the-box experience when using feature-rich themes.
+### Prerequisites
 
-To fully use all the features of **Chirpy**, you need to copy the other critical files from the theme's gem to your
-Jekyll site. The following is a list of targets:
+Make sure you have Ruby and Bundler installed on your system.
 
-```shell
-.
-├── _config.yml
-├── _plugins
-├── _tabs
-└── index.html
+### Installation
+
+Install dependencies:
+
+```bash
+bundle install
 ```
 
-To save you time, and also in case you lose some files while copying, we extract those files/configurations of the
-latest version of the **Chirpy** theme and the [CD][CD] workflow to here, so that you can start writing in minutes.
+### Running Locally
 
-## Usage
+To run the application locally:
 
-Check out the [theme's docs](https://github.com/cotes2020/jekyll-theme-chirpy/wiki).
+```bash
+bundle exec jekyll s
+```
 
-## Contributing
+Then open your browser and navigate to `http://localhost:4000`.
 
-This repository is automatically updated with new releases from the theme repository. If you encounter any issues or want to contribute to its improvement, please visit the [theme repository][chirpy] to provide feedback.
+## Documentation
+
+- [Chirpy Theme Documentation](https://github.com/cotes2020/jekyll-theme-chirpy/wiki)
+- [Jekyll Documentation](https://jekyllrb.com/docs/)
+- [Ruby Bundler Documentation](https://bundler.io/docs.html)
 
 ## License
 
-This work is published under [MIT][mit] License.
-
-[gem]: https://rubygems.org/gems/jekyll-theme-chirpy
-[chirpy]: https://github.com/cotes2020/jekyll-theme-chirpy/
-[CD]: https://en.wikipedia.org/wiki/Continuous_deployment
-[mit]: https://github.com/cotes2020/chirpy-starter/blob/master/LICENSE
+This work is published under [MIT](https://github.com/cotes2020/chirpy-starter/blob/master/LICENSE) License.

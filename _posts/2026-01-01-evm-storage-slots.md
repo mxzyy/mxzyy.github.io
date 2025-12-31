@@ -46,7 +46,7 @@ Think of EVM storage as an enormous filing cabinet with 2²⁵⁶ drawers. Each 
 
 State variables are assigned to slots **sequentially** in the order they're declared, starting from slot 0.
 
-```solidity
+```
 contract BasicLayout {
     uint256 public a;      // Slot 0
     uint256 public b;      // Slot 1
@@ -104,7 +104,7 @@ The Solidity compiler **packs** multiple smaller variables into a single slot wh
 
 Variables are packed from **right to left** (low-order bytes first) within a slot:
 
-```solidity
+```
 contract PackedVariables {
     uint128 public a;  // Slot 0 (lower 16 bytes)
     uint128 public b;  // Slot 0 (upper 16 bytes)
@@ -125,7 +125,7 @@ contract PackedVariables {
 
 ### Practical Packing Example
 
-```solidity
+```
 contract EfficientStorage {
     // GOOD: Variables packed efficiently (2 slots total)
     address public owner;     // 20 bytes ─┐
@@ -194,7 +194,7 @@ With hashing (ACTUAL IMPLEMENTATION):
 
 ### Step-by-Step Example
 
-```solidity
+```
 contract DynamicArrayStorage {
     uint256[] public numbers;  // Slot 0 (stores length)
     uint256 public value;      // Slot 1 (safe from array collision)
@@ -291,7 +291,7 @@ Mappings only allocate storage for keys that actually exist. The hash ensures:
 
 ### Mapping Example
 
-```solidity
+```
 contract MappingStorage {
     mapping(address => uint256) public balances;  // Slot 0
     uint256 public totalSupply;                   // Slot 1
@@ -305,7 +305,7 @@ contract MappingStorage {
 
 **Slot calculation for `balances[0xAAA...AAA]`:**
 
-```solidity
+```
 // Step 1: Pad the key to 32 bytes
 key = 0x000000000000000000000000AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
@@ -348,7 +348,7 @@ When you combine mappings, arrays, and structs, the storage calculations become 
 
 For nested mappings like `mapping(address => mapping(uint256 => bool))`, you apply the hashing formula recursively.
 
-```solidity
+```
 contract NestedMapping {
     // mapping(address => mapping(uint256 => bool))
     mapping(address => mapping(uint256 => bool)) public permissions;  // Slot 0
@@ -369,7 +369,7 @@ Step 2: Calculate final slot for permissions[addr][id]
 
 **Concrete Example:**
 
-```solidity
+```
 permissions[0xAAA...AAA][42] = true;
 ```
 
@@ -400,7 +400,7 @@ Storage:
 
 ### Mapping to Array
 
-```solidity
+```
 contract MappingToArray {
     mapping(address => uint256[]) public userScores;  // Slot 0
 }
@@ -417,7 +417,7 @@ Step 2: Calculate element location
         elementSlot = keccak256(arraySlot) + i
 ```
 
-```solidity
+```
 userScores[0xAAA...AAA].push(100);
 userScores[0xAAA...AAA].push(200);
 ```
@@ -437,7 +437,7 @@ Storage Layout:
 
 ### Array of Structs
 
-```solidity
+```
 contract ArrayOfStructs {
     struct User {
         address addr;     // 20 bytes ─┐
@@ -532,7 +532,7 @@ Output: none
 
 ### Assembly Example
 
-```solidity
+```
 contract StorageOps {
     uint256 public value;  // Slot 0
 
@@ -574,7 +574,7 @@ contract StorageOps {
 
 ### Example 1: ERC20 Token Storage
 
-```solidity
+```
 contract SimpleERC20 {
     string public name;                           // Slot 0
     string public symbol;                         // Slot 1
@@ -602,7 +602,7 @@ Storage Layout:
 
 ### Example 2: NFT Ownership Tracking
 
-```solidity
+```
 contract SimpleNFT {
     mapping(uint256 => address) public ownerOf;        // Slot 0
     mapping(address => uint256) public balanceOf;      // Slot 1
@@ -613,7 +613,7 @@ contract SimpleNFT {
 
 **Query: Who owns token #42?**
 
-```solidity
+```
 // Storage location for ownerOf[42]:
 slot = keccak256(
     0x000000000000000000000000000000000000000000000000000000000000002a  // 42
@@ -623,7 +623,7 @@ slot = keccak256(
 
 ### Example 3: Reading Packed Variables
 
-```solidity
+```
 contract PackedReader {
     address public owner;     // Slot 0: bytes 0-19
     uint96 public balance;    // Slot 0: bytes 20-31
@@ -670,7 +670,7 @@ contract PackedReader {
 
 ### Best Practices
 
-```solidity
+```
 // DO: Group small variables for packing
 address owner;      // 20 bytes ─┐
 uint96 balance;     // 12 bytes ─┘ 1 slot

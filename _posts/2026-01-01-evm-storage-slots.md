@@ -1,6 +1,6 @@
 ---
 title: EVM Storage Slot
-date: 2026-01-01 09:00 +0700
+date: 2026-01-01 2:30 +0700
 categories: [Blockchain, Ethereum, Solidity]
 tags: [evm, storage, solidity, smart-contracts]
 author: mxzyy

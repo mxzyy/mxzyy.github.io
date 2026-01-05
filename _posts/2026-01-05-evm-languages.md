@@ -1,10 +1,12 @@
 ---
-title: "Solidity, Yul, and Huff history"
-date: 2026-01-05 10:00 +0700
+title: "EVM Languages"
+date: 2026-01-05 08:30 +0700
 categories: [Blockchain, Security, EVM]
 tags: [solidity, yul, huff, smart-contract-auditing, evm, security]
 author: mxzyy
 ---
+
+The Ethereum Virtual Machine speaks only one language: bytecode. Yet developers rarely write bytecode directly. Instead, we use layers of abstraction—Solidity for readability, Yul for control, and Huff for precision. Each language emerged from specific needs in Ethereum's evolution: Solidity brought accessibility in 2014, Yul answered the gas optimization crisis of 2017, and Huff delivered deterministic bytecode for protocols where every opcode matters. Understanding why these languages exist—and what each one hides or reveals—is fundamental for anyone building, optimizing, or auditing smart contracts. This guide traces their history and examines how they transform the same logic into increasingly lower-level representations.
 
 **The EVM language hierarchy:**
 

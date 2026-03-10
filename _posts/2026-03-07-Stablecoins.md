@@ -228,6 +228,511 @@ This is the central tension in MakerDAO's design: the PSM provides reliable peg 
 
 ---
 
+## Mathematics of Overcollateralized Stablecoins
+
+The MakerDAO mechanics above—vaults, keepers, liquidations, the PSM—are all implementations of underlying mathematical relationships. This section formalizes those relationships. Every formula here maps directly to on-chain logic: collateralization checks in `Vat.frob()`, liquidation triggers in `Dog.bark()`, interest accumulation in `Jug.drip()`. Understanding the math means understanding exactly when and why a position becomes dangerous.
+
+### 1. Collateralization Ratio (CR)
+
+The collateralization ratio measures how much collateral value backs each unit of debt. It is the single most important number for any vault position.
+
+$$
+CR = \frac{C \times P}{D}
+$$
+
+| Variable | Definition |
+|---|---|
+| `C` | Amount of collateral deposited (e.g., ETH quantity) |
+| `P` | Current market price of collateral asset (e.g., USD per ETH) |
+| `D` | Outstanding debt in stablecoins (e.g., DAI owed) |
+
+**Worked example:**
+
+```
+Given:
+  C = 10 ETH
+  P = $2,000 per ETH
+  D = 10,000 DAI
+
+CR = (10 × $2,000) / $10,000
+CR = $20,000 / $10,000
+CR = 2.0 = 200%
+```
+
+A 200% CR means the vault holds $2 of collateral for every $1 of debt. This is a healthy position with significant buffer.
+
+**Edge case — approaching liquidation:**
+
+```
+ETH drops to $1,500:
+  CR = (10 × $1,500) / $10,000
+  CR = $15,000 / $10,000
+  CR = 1.5 = 150%
+
+For an ETH-A vault (150% minimum), this position is now at the liquidation boundary.
+Any further price drop triggers liquidation.
+```
+
+**Relationship to other formulas:** CR is the foundation. The health factor (§2) normalizes CR against the liquidation threshold. Maximum mintable debt (§3) is derived by solving CR for `D`. The liquidation price (§4) is derived by solving CR for `P` at the minimum threshold.
+
+---
+
+### 2. Health Factor (Hf)
+
+The health factor expresses how close a position is to liquidation as a single number. When `Hf < 1`, the position is liquidatable.
+
+$$
+H_f = \frac{C \times P \times L_t}{D}
+$$
+
+| Variable | Definition |
+|---|---|
+| `C` | Amount of collateral deposited |
+| `P` | Current market price of collateral |
+| `L_t` | Liquidation threshold (expressed as a decimal, e.g., 0.6667 for a 150% min CR) |
+| `D` | Outstanding debt |
+
+The liquidation threshold `L_t` is the inverse of the minimum collateralization ratio: `L_t = 1 / CR_min`. For a 150% minimum CR, `L_t = 1/1.5 ≈ 0.6667`. For a 200% minimum CR (like ETH-C vaults in MakerDAO), `L_t = 1/2.0 = 0.5`.
+
+**Why 50% (200% overcollateralization) is a common threshold:**
+
+A 50% liquidation threshold (`L_t = 0.5`, i.e., `CR_min = 200%`) means collateral can lose half its value before the position becomes under-collateralized. This buffer accounts for:
+- Volatile assets (ETH can drop 30%+ in a day, as Black Thursday showed)
+- Liquidation execution delay (time between price drop and actual auction completion)
+- Liquidation penalty overhead (the penalty itself consumes collateral)
+- Oracle latency (price feeds update periodically, not continuously)
+
+Lower-volatility collateral types get tighter thresholds (e.g., USDC vaults at 101%), while volatile assets need wider buffers.
+
+**Worked example — safe position:**
+
+```
+Given:
+  C = 10 ETH
+  P = $2,000
+  L_t = 0.6667 (150% min CR, ETH-A vault)
+  D = 10,000 DAI
+
+Hf = (10 × $2,000 × 0.6667) / $10,000
+Hf = $13,334 / $10,000
+Hf = 1.33
+
+Hf > 1 → Position is safe. Collateral can still drop ~25% before liquidation.
+```
+
+**Edge case — liquidation imminent:**
+
+```
+ETH drops to $1,400:
+  Hf = (10 × $1,400 × 0.6667) / $10,000
+  Hf = $9,334 / $10,000
+  Hf = 0.93
+
+Hf < 1 → Position is liquidatable. Keepers can trigger liquidation immediately.
+```
+
+**Relationship to other formulas:** Health factor is a normalized form of CR. When `Hf = 1`, `CR = CR_min`—the position is exactly at the liquidation boundary. The liquidation price (§4) is the price `P` that makes `Hf = 1`. The liquidation penalty (§5) determines how much collateral is actually seized once `Hf` drops below 1.
+
+---
+
+### 3. Maximum Mintable (Dmax)
+
+Given a collateral deposit, the maximum stablecoin debt a user can take on before hitting the minimum collateralization ratio.
+
+$$
+D_{max} = \frac{C \times P}{CR_{min}}
+$$
+
+| Variable | Definition |
+|---|---|
+| `C` | Amount of collateral deposited |
+| `P` | Current market price of collateral |
+| `CR_{min}` | Minimum collateralization ratio (e.g., 1.5 for 150%) |
+
+**Worked example:**
+
+```
+Given:
+  C = 10 ETH
+  P = $2,000
+  CR_min = 1.5 (ETH-A vault)
+
+Dmax = (10 × $2,000) / 1.5
+Dmax = $20,000 / 1.5
+Dmax = 13,333.33 DAI
+
+This is the absolute maximum. Minting this amount puts the vault at exactly
+150% CR — one wei of price movement triggers liquidation.
+```
+
+In practice, users should mint well below `Dmax`. A common heuristic is to target a CR of 200-300%, which means minting only 50-75% of `Dmax`:
+
+```
+Safe mint (targeting 250% CR):
+  D_safe = (10 × $2,000) / 2.5
+  D_safe = 8,000 DAI
+
+This leaves room for a 40% ETH price drop before liquidation:
+  CR at $1,200 ETH: (10 × $1,200) / $8,000 = 150% → just at boundary
+```
+
+**Edge case — minting at maximum:**
+
+```
+User mints Dmax = 13,333 DAI (exactly 150% CR)
+
+ETH drops 1% to $1,980:
+  CR = (10 × $1,980) / $13,333 = 148.5%
+  → Below 150% minimum. Liquidation triggered.
+
+The user loses 13% liquidation penalty on top of the price drop.
+Total loss: collateral seized, penalty applied, remaining collateral returned
+(if any). Minting at Dmax is effectively gambling that the collateral price
+will never move down.
+```
+
+**Relationship to other formulas:** `Dmax` is CR (§1) solved for `D` at the minimum threshold. Minting `Dmax` sets `Hf = 1` (§2). The stability fee (§6) means actual debt grows over time, so even a position minted below `Dmax` can approach the liquidation boundary as interest accrues.
+
+---
+
+### 4. Liquidation Price
+
+The collateral price at which a position becomes liquidatable. Derived by setting `Hf = 1` and solving for `P`.
+
+$$
+P_{liq} = \frac{D \times CR_{min}}{C}
+$$
+
+| Variable | Definition |
+|---|---|
+| `D` | Outstanding debt |
+| `CR_{min}` | Minimum collateralization ratio |
+| `C` | Amount of collateral deposited |
+
+**Derivation:** Start with the CR equation at the liquidation boundary:
+
+```
+CR_min = (C × P_liq) / D
+→ P_liq = (D × CR_min) / C
+```
+
+**Worked example:**
+
+```
+Given:
+  C = 10 ETH
+  D = 10,000 DAI
+  CR_min = 1.5
+
+P_liq = ($10,000 × 1.5) / 10
+P_liq = $15,000 / 10
+P_liq = $1,500
+
+If ETH falls to $1,500, this vault gets liquidated.
+Current ETH price is $2,000, so there's a $500 (25%) buffer.
+```
+
+**Edge case — high leverage:**
+
+```
+Same collateral, but user minted 12,000 DAI instead:
+
+P_liq = ($12,000 × 1.5) / 10
+P_liq = $1,800
+
+Now liquidation triggers at $1,800 — only a 10% drop from $2,000.
+A single volatile day (like Black Thursday's 43% drop) would blow
+through this level instantly.
+```
+
+**Edge case — stability fee erosion:**
+
+```
+User opens vault with D = 10,000 DAI. P_liq = $1,500 initially.
+After 2 years at 5% stability fee:
+
+D_actual = 10,000 × (1.05)^2 = 11,025 DAI
+P_liq = ($11,025 × 1.5) / 10 = $1,653.75
+
+The liquidation price crept up by $153.75 — without the user doing anything.
+Stability fees silently erode the safety buffer.
+```
+
+**Relationship to other formulas:** Liquidation price is the inverse of maximum mintable (§3)—one solves for `D`, the other for `P`, both at the CR boundary. The stability fee (§6) continuously increases `D`, which continuously increases `P_liq`. Once liquidation triggers, the penalty formula (§5) determines the actual cost.
+
+---
+
+### 5. Liquidation Penalty & Liquidator Profit
+
+When a vault is liquidated, the system doesn't just seize enough collateral to cover the debt—it adds a penalty. This penalty incentivizes keepers to perform liquidations promptly and creates a cost for users who let their positions become unhealthy.
+
+**Collateral seized:**
+
+$$
+C_{seized} = \frac{D \times (1 + \lambda)}{P}
+$$
+
+| Variable | Definition |
+|---|---|
+| `D` | Outstanding debt at time of liquidation |
+| `λ` (lambda) | Liquidation penalty rate (e.g., 0.13 for MakerDAO's 13% on ETH-A) |
+| `P` | Collateral price at time of liquidation |
+
+**Liquidator profit:**
+
+$$
+\pi = C_{seized} \times P - D = D \times \lambda
+$$
+
+In a competitive market, the liquidator's gross profit approaches `D × λ` (the penalty amount), minus gas costs and any discount from the Dutch auction price.
+
+**Worked example:**
+
+```
+Given:
+  C = 10 ETH
+  D = 10,000 DAI
+  P = $1,450 (just below liquidation price of $1,500)
+  λ = 0.13 (13% penalty)
+
+Collateral seized:
+  C_seized = $10,000 × (1 + 0.13) / $1,450
+  C_seized = $11,300 / $1,450
+  C_seized = 7.79 ETH
+
+Value of seized collateral: 7.79 × $1,450 = $11,300
+Liquidator pays: 10,000 DAI
+Liquidator gross profit: $11,300 - $10,000 = $1,300 (= D × λ)
+
+Vault owner receives remaining collateral:
+  10 - 7.79 = 2.21 ETH ($3,204.50)
+
+Vault owner's total loss:
+  Original: 10 ETH ($14,500) - 10,000 DAI debt = $4,500 net equity
+  After liquidation: 2.21 ETH ($3,204.50) - 0 DAI debt = $3,204.50
+  Loss from liquidation: $4,500 - $3,204.50 = $1,295.50 (≈ the 13% penalty)
+```
+
+**Edge case — collateral insufficient to cover debt + penalty:**
+
+```
+ETH crashes to $1,050 before liquidation executes (oracle delay, gas spike):
+
+  C_seized = $10,000 × 1.13 / $1,050 = 10.76 ETH
+
+But the vault only has 10 ETH. The system can seize at most 10 ETH:
+  Value: 10 × $1,050 = $10,500
+  Debt: $10,000
+  Penalty coverage: only $500 of the $1,300 penalty is covered
+
+  Remaining: $10,500 - $10,000 = $500 for the penalty
+  Bad debt: $0 (debt is covered, but penalty is partially absorbed)
+
+If ETH drops further to $900:
+  Collateral value: 10 × $900 = $9,000
+  Debt: $10,000
+  Bad debt: $1,000 — the system cannot fully recover the loan.
+  This is how MakerDAO accumulated $5.4M in bad debt on Black Thursday.
+```
+
+**Relationship to other formulas:** The penalty `λ` is what makes liquidation profitable for keepers, which is what makes the CR (§1) and Hf (§2) thresholds enforceable. Without profitable liquidations, minimum CR requirements are unenforceable promises. The penalty also means the effective cost of liquidation exceeds what the simple liquidation price (§4) suggests—users lose more than just the price difference.
+
+---
+
+### 6. Stability Fee (Compound Interest)
+
+The stability fee is MakerDAO's version of an interest rate. It's charged on outstanding DAI debt and accrues continuously. The fee is set per-collateral-type by MKR governance and serves two purposes: generating protocol revenue and acting as a monetary policy lever (higher fees discourage borrowing, reducing DAI supply).
+
+$$
+D(t) = D_0 \times \left(1 + r\right)^t
+$$
+
+For continuous compounding (closer to on-chain implementation):
+
+$$
+D(t) = D_0 \times e^{r \cdot t}
+$$
+
+| Variable | Definition |
+|---|---|
+| `D_0` | Initial debt (DAI minted) |
+| `r` | Annual stability fee rate (e.g., 0.05 for 5%) |
+| `t` | Time in years |
+| `D(t)` | Total debt owed at time `t` |
+
+On-chain, MakerDAO uses a per-second compounding rate. The `Jug` contract stores a rate value that is multiplied into the cumulative rate accumulator on every `drip()` call. The per-second rate for 5% annual is:
+
+```
+r_per_second = (1.05)^(1/31536000) ≈ 1.0000000015854896
+```
+
+**Worked example (discrete annual compounding):**
+
+```
+Given:
+  D_0 = 10,000 DAI
+  r = 5% annually
+
+After 1 year:
+  D(1) = 10,000 × (1.05)^1 = 10,500 DAI
+  Interest owed: 500 DAI
+
+After 3 years:
+  D(3) = 10,000 × (1.05)^3 = 11,576.25 DAI
+  Interest owed: 1,576.25 DAI
+
+After 5 years:
+  D(5) = 10,000 × (1.05)^5 = 12,762.82 DAI
+  Interest owed: 2,762.82 DAI
+```
+
+**Edge case — stability fee triggers liquidation:**
+
+```
+Initial position:
+  C = 10 ETH, P = $2,000 (constant — no price movement)
+  D_0 = 12,000 DAI
+  CR_min = 1.5, r = 8% annual
+
+Initial CR: (10 × $2,000) / $12,000 = 166.7% — above 150%, safe.
+
+After 1 year:
+  D(1) = 12,000 × 1.08 = 12,960 DAI
+  CR = $20,000 / $12,960 = 154.3% — still safe, but shrinking.
+
+After 2 years:
+  D(2) = 12,000 × (1.08)^2 = 13,996.80 DAI
+  CR = $20,000 / $13,996.80 = 142.9% — below 150%. Liquidated.
+
+ETH price never moved. The stability fee alone pushed the position
+below the liquidation threshold. Users must either:
+  1. Pay down accrued fees periodically
+  2. Add more collateral
+  3. Maintain a large enough buffer to absorb fee growth
+```
+
+**Relationship to other formulas:** The stability fee continuously increases `D`, which decreases CR (§1), decreases Hf (§2), increases the liquidation price (§4), and means `Dmax` (§3) must be recalculated against the growing debt, not the original mint amount. It is the silent force that erodes every safety buffer over time.
+
+---
+
+### 7. Peg Arbitrage Profit
+
+When DAI deviates from its $1.00 peg, arbitrageurs can profit by trading against the deviation, pushing the price back toward peg. The PSM makes this especially efficient by providing a guaranteed 1:1 swap.
+
+**DAI below peg (buy DAI, redeem at PSM):**
+
+$$
+\pi = Q \times (1 - P_{DAI}) - G
+$$
+
+**DAI above peg (mint DAI via PSM, sell on market):**
+
+$$
+\pi = Q \times (P_{DAI} - 1) - G
+$$
+
+| Variable | Definition |
+|---|---|
+| `Q` | Quantity of DAI traded |
+| `P_{DAI}` | Current market price of DAI (e.g., $0.98 or $1.03) |
+| `G` | Total gas cost of the transaction(s) in USD |
+| `π` | Arbitrage profit |
+
+**Worked example — DAI below peg:**
+
+```
+Given:
+  P_DAI = $0.98 (DAI trading at 2% discount)
+  Q = 100,000 DAI
+  G = $15 (gas for swap on DEX + PSM redemption)
+
+Step 1: Buy 100,000 DAI on market
+  Cost: 100,000 × $0.98 = $98,000
+
+Step 2: Redeem 100,000 DAI at PSM for 100,000 USDC
+  Received: $100,000
+
+Profit:
+  π = 100,000 × (1 - 0.98) - $15
+  π = $2,000 - $15
+  π = $1,985
+```
+
+**Worked example — DAI above peg:**
+
+```
+Given:
+  P_DAI = $1.015
+  Q = 50,000 DAI
+  G = $15
+
+Step 1: Deposit 50,000 USDC into PSM, receive 50,000 DAI
+  Cost: $50,000
+
+Step 2: Sell 50,000 DAI on market at $1.015
+  Received: $50,750
+
+Profit:
+  π = 50,000 × (1.015 - 1) - $15
+  π = $750 - $15
+  π = $735
+```
+
+**Edge case — gas costs kill small arbitrage:**
+
+```
+P_DAI = $0.998 (0.2% deviation — small but real)
+G = $30 (moderate gas)
+
+Minimum profitable trade size:
+  π > 0 → Q × (1 - 0.998) > $30
+  Q × 0.002 > $30
+  Q > 15,000 DAI
+
+Any trade below 15,000 DAI loses money to gas.
+At $0.999 deviation (0.1%), minimum Q > 30,000 DAI.
+
+This is why small deviations can persist — they're not profitable
+to arbitrage at retail scale. Large market makers with optimized
+gas costs and MEV strategies can profitably arbitrage tighter bands.
+```
+
+**Edge case — PSM fee:**
+
+```
+If the PSM charges a fee (e.g., 0.1% tin/tout):
+  π = Q × (1 - P_DAI) - G - Q × f_PSM
+
+At $0.98 DAI with 0.1% PSM fee:
+  π = 100,000 × 0.02 - $15 - 100,000 × 0.001
+  π = $2,000 - $15 - $100
+  π = $1,885
+
+The PSM fee slightly reduces profit but doesn't eliminate the
+arbitrage at this deviation level. At smaller deviations, the
+PSM fee becomes a larger fraction of potential profit.
+```
+
+**Relationship to other formulas:** Peg arbitrage is the market mechanism that enforces DAI's $1.00 target. Without profitable arbitrage, the peg would drift. The stability fee (§6) indirectly affects peg dynamics—higher fees reduce DAI supply (users repay debt to avoid fees), which pushes DAI price up. The PSM provides the hard anchor that makes arbitrage risk-free (no slippage, guaranteed rate), but requires USDC reserves, which connects back to the centralization tradeoffs discussed in the PSM section above.
+
+---
+
+### Formula Reference Table
+
+| # | Formula | What It Answers | Key Variables | Danger Signal |
+|---|---|---|---|---|
+| 1 | `CR = (C × P) / D` | How collateralized is my position? | Collateral, Price, Debt | `CR < CR_min` |
+| 2 | `Hf = (C × P × L_t) / D` | How close am I to liquidation? | + Liquidation threshold | `Hf < 1` |
+| 3 | `Dmax = (C × P) / CR_min` | How much can I borrow? | Collateral, Price, Min ratio | Minting near `Dmax` |
+| 4 | `P_liq = (D × CR_min) / C` | What price liquidates me? | Debt, Min ratio, Collateral | `P_liq` close to current `P` |
+| 5 | `C_seized = D(1+λ) / P` | What do I lose in liquidation? | + Penalty rate | `C_seized > C` (bad debt) |
+| 6 | `D(t) = D_0 × (1+r)^t` | How does my debt grow? | Initial debt, Rate, Time | `D(t)` pushing CR toward `CR_min` |
+| 7 | `π = Q × |1 - P_DAI| - G` | Is peg arbitrage profitable? | Quantity, DAI price, Gas | `G > Q × deviation` (unprofitable) |
+
+These formulas are interconnected: the stability fee (6) increases debt `D`, which decreases CR (1) and Hf (2), raises the liquidation price (4), and increases the collateral seized if liquidation occurs (5). Peg arbitrage (7) is the external market force that makes the whole system worth building—without a reliable peg, none of the other mechanics matter.
+
+---
+
 ## Rebase Stablecoins — Ampleforth (AMPL)
 
 Ampleforth takes a radically different approach. Instead of using collateral or governance to maintain stability, AMPL adjusts its own supply. Every wallet's balance changes automatically based on the protocol's target price.

@@ -4,6 +4,7 @@ date: 2026-03-07 08:30 +0700
 categories: [Blockchain, Security]
 tags: [stablecoins, defi, makerdao, dai, usdc, usdt, terra-luna, algorithmic-stablecoins]
 author: mxzyy
+math: true
 ---
 
 A stablecoin is a crypto token designed to maintain relative stability of purchasing power. That definition matters. Calling stablecoins "digital dollars" misses the point—some are pegged to the US dollar, others to gold, and some float entirely. The core idea is **stability relative to some reference**, not a fixed parity to fiat currency. The mechanisms used to achieve that stability—and the tradeoffs they introduce—are what separate functional designs from catastrophic ones.
